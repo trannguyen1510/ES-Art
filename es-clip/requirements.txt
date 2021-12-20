@@ -1,5 +1,0 @@
-ftfy
-regex
-tqdm
-numpy
-Pillow
