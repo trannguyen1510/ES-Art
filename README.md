@@ -105,15 +105,10 @@ Specifically,
 - `es_clip.py` could run reasonably well with one GPU while more GPUs are better. It could also run in a CPU-only setting, but that would be too slow for a reasonble expectation.
 
 
-## Community Works
+## Source
 
-Here listed are some works by the community that are likely related to or based on this work. 
-Please [let us know](https://github.com/es-clip/es-clip.github.io/issues) if you think some works are missing and should be added here!
-**There are provided here for information purposes only and mentiong them does not consitute an endorsement, so proceed at your own discretion.**
-
-* [@eyaler](https://twitter.com/eyaler) Provided a [biggan + clip + cma-es work](https://github.com/eyaler/clip_biggan) as a [Colab notebook](https://colab.sandbox.google.com/github/eyaler/clip_biggan/blob/main/WanderCLIP.ipynb).
-* [@gestaltungai](https://twitter.com/gestaltungai) started a simple [Colab notebook](https://colab.research.google.com/drive/1DGNxs8E4cA_ZUwPQdusxDArCWj-JX5TG) to play with this work.
+[Paper](https://github.com/es-clip/es-clip.github.io/issues) if you think some works are missing and should be added here!
 
 ## Disclaimer
-
-This is not an official Google product.
+This is a edited version from forking and only used for studying and experimenting purposes.
+The official repo is [here](https://github.com/google/brain-tokyo-workshop/tree/master/es-clip).
