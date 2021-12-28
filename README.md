@@ -104,11 +104,6 @@ Specifically,
 - `es_bitmap.py` could effectively use multiple CPU cores, and has a performance roughly proportional to the number of CPU cores.
 - `es_clip.py` could run reasonably well with one GPU while more GPUs are better. It could also run in a CPU-only setting, but that would be too slow for a reasonble expectation.
 
-
-## Source
-
-[Paper](https://github.com/es-clip/es-clip.github.io/issues)
-
 ## Disclaimer
 This is a edited version from forking and only used for studying and experimenting purposes.
 The official repo is [here](https://github.com/google/brain-tokyo-workshop/tree/master/es-clip).
