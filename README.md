@@ -5,9 +5,9 @@
 </p>
 
 This is the code for our work "Modern Evolution Strategies for Creativity: Fitting Concrete Images and Abstract Concepts".
+
 For more information, please refer to <https://es-clip.github.io/>. 
 
-**Update**: Please scroll down for a section discribing community works.
 
 ## Requirements
 
@@ -19,8 +19,10 @@ For more information, please refer to <https://es-clip.github.io/>.
 6. [PGPElib](https://github.com/nnaisense/pgpelib).
 7. [CLIP](https://github.com/openai/CLIP) from OpenAI.
 
-Below is an example of setting up on a Linux machine with CUDA installed using Anaconda3 for your reference. 
+Below is an example of setting up on a Linux machine with CUDA installed using Anaconda3 for your reference.
+
 It installs the most recent version for all dependencies.
+
 You may need to adjust accordingly for a CUDA-enabled PyTorch installation following instructions on <https://pytorch.org/>
 
 ```bash
@@ -49,6 +51,7 @@ python3 ./es_bitmap.py --target_fn assets/monalisa.png
 ``` 
 By default, it fits the given image and output the evolution results to `./es_bitmap_out`. The computation would consume all available CPU cores, but does not require GPU(s).
 
+
 The behavior of the fitting could be fine-tuned by specifying command line parameters, for example:
 ```bash
 python3 ./es_bitmap.py \
@@ -72,6 +75,7 @@ For more options, consult the output of `python3 ./es_bitmap.py --help`.
 python3 ./es_clip.py --prompt "Walt Disney World" --gpus 0
 ``` 
 By default, it fits the given prompt and output the evolution results to `./es_clipt_out`, and uses the first GPU.
+
 
 Like the previous script, The behavior of the fitting could be fine-tuned by specifying command line parameters, for example:
 
