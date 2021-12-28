@@ -107,7 +107,7 @@ Specifically,
 
 ## Source
 
-[Paper](https://github.com/es-clip/es-clip.github.io/issues) if you think some works are missing and should be added here!
+[Paper](https://github.com/es-clip/es-clip.github.io/issues)
 
 ## Disclaimer
 This is a edited version from forking and only used for studying and experimenting purposes.
