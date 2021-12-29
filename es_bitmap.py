@@ -69,6 +69,11 @@ def parse_args(cmd_args):
 
     return args
 
+def dump_info(args):
+    args_dump_fn = os.path.join(args.working_dir, 'args.json')
+    with open(args_dump_fn, 'w') as f:
+        json.dump(args, f, indent=4)
+
 
 def pre_training_loop(args):
     out_dir = args.out_dir
@@ -83,11 +88,9 @@ def pre_training_loop(args):
            f'{args.solver}-solver-' \
            f'{args.loss_type}-loss'
     args.working_dir = os.path.join(out_dir, f'{new_id:04d}-{desc}')
-
+    args.last_inter = 0
     os.makedirs(args.working_dir)
-    args_dump_fn = os.path.join(args.working_dir, 'args.json')
-    with open(args_dump_fn, 'w') as f:
-        json.dump(args, f, indent=4)
+    dump_info(args)
 
 
 def cpts_loop(args):
@@ -116,8 +119,9 @@ def cpts_loop(args):
         check = False
     if args.n_triangle != info['n_triangle']:
         check = False
-    if args.n_iterations != info['n_iterations']:
+    if args.n_iterations < info['n_iterations']:
         check = False
+        raise ValueError(f'Incorrect Iterations: {args.n_iterations}')
     if args.n_population != info['n_population']:
         check = False
     if args.solver != info['solver']:
@@ -126,6 +130,17 @@ def cpts_loop(args):
         check = False
     if not check:
         print('Wrong info')
+
+    desc = f'{os.path.splitext(os.path.basename(args.target_fn))[0]}-' \
+           f'{args.n_triangle}-triangles-' \
+           f'{args.n_iterations}-iterations-' \
+           f'{args.n_population}-population-' \
+           f'{args.solver}-solver-' \
+           f'{args.loss_type}-loss'
+    new_working_dir = os.path.join(out_dir, f'{id_con:04d}-{desc}')
+    os.rename(args.working_dir, new_working_dir)
+    args.working_dir = new_working_dir
+    args.last_inter = info['last_inter']
 
 
 def load_target(fn, resize):
@@ -204,7 +219,7 @@ def infer_height_and_width(hint_height, hint_width, fn):
 
     return inferred_height, inferred_width
 
-def create_hook(args):
+def create_hook(args, painter):
     hooks = [
             (args.step_report_interval, PrintStepHook()),
             (args.report_interval, PrintCostHook()),
@@ -218,7 +233,7 @@ def create_hook(args):
                     save_interval=args.save_as_gif_interval,
                 ),
             ),
-            (args.report_interval, StoreParamHook()),
+            (args.report_interval, StoreParamHook(save_fp=os.path.join(args.working_dir, 'data.npy'))),
             (args.report_interval, ShowImageHook(render_fn=lambda params: painter.render(params, background='white'))),
     ]
 
@@ -226,9 +241,13 @@ def create_hook(args):
         for hook in hooks:
             _, hook_fn_or_obj = hook
             hook_fn_or_obj.load()
+            if hasattr(hook_fn_or_obj, 'best_params'):
+                center_init = hook_fn_or_obj.best_params
         print('Done loading')
+    else:
+        center_init = None
 
-    return hooks
+    return hooks, center_init
 
 def training_loop(args):
     height, width = infer_height_and_width(args.height, args.width, args.target_fn)
@@ -244,7 +263,7 @@ def training_loop(args):
     target_arr = load_target(args.target_fn, (height, width))
     save_as_png(os.path.join(args.working_dir, 'target'), arr2img(target_arr))
 
-    hooks = create_hook(args)
+    hooks, center_init = create_hook(args, painter)
 
     allowed_solver = ['pgpe']
     if args.solver not in allowed_solver:
@@ -257,6 +276,7 @@ def training_loop(args):
             popsize=args.n_population,
             optimizer='clipup',
             optimizer_config={'max_speed': 0.15},
+            center_init = center_init
         )
     else:
         raise ValueError()
@@ -267,10 +287,14 @@ def training_loop(args):
     # fitnesses_fn is OK to be inefficient as it's for hook's use only.
     fitnesses_fn = lambda fitness_fn, solutions: [fitness_fn(_, painter, target_arr, loss_type) for _ in solutions]
     n_iterations = args.n_iterations
+    if args.load_ckpts:
+        init_inter = args.last_inter
+    else:
+        init_inter = 1
     mp_batch_size = args.mp_batch_size
     proc_pool = mp.Pool(processes=mp.cpu_count(), initializer=init_worker, initargs=(painter, target_arr, loss_type))
 
-    for i in range(1, 1 + n_iterations):
+    for i in range(init_inter, 1 + n_iterations):
         solutions = solver.ask()
 
         batch_it = (solutions[start:start + mp_batch_size] for start in range(0, len(solutions), mp_batch_size))
@@ -283,6 +307,8 @@ def training_loop(args):
             trigger_itervel, hook_fn_or_obj = hook
             if i % trigger_itervel == 0:
                 hook_fn_or_obj(i, solver, fitness_fn, fitnesses_fn, best_params_fn)
+                args.last_inter = i
+                dump_info(args)
 
     for hook in hooks:
         _, hook_fn_or_obj = hook

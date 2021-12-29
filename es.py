@@ -117,23 +117,22 @@ class StoreImageHook(Hook):
 
 
 class StoreParamHook(Hook):
-    def __init__(self):
+    def __init__(self, save_fp):
         super().__init__()
+        self.save_fp = save_fp
 
     def __call__(self, i, solver, fitness_fn, fitnesses_fn, best_params_fn):
         self.best_params = best_params_fn(solver)
-        if i % self.save_interval == 0:
-            self.save()
+        self.save()
 
     def load(self):
-        self.best_params = np.load('data.npy')
-        pass
+        self.best_params = np.load(self.save_fp)
 
     def close(self):
         self.save()
 
     def save(self):
-        np.save('data.npy', self.best_params)
+        np.save(self.save_fp, self.best_params)
 
 
 class ShowImageHook(Hook):
