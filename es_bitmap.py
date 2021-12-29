@@ -18,7 +18,7 @@ from pgpelib import PGPE
 
 from utils import (img2arr, arr2img, rgba2rgb, save_as_png, EasyDict)
 from painter import TrianglesPainter
-from es import (get_tell_fn, get_best_params_fn, PrintStepHook, PrintCostHook, SaveCostHook, StoreImageHook, ShowImageHook)
+from es import (get_tell_fn, get_best_params_fn, PrintStepHook, PrintCostHook, SaveCostHook, StoreImageHook, StoreParamHook, ShowImageHook)
 
 
 def parse_cmd_args():
@@ -40,6 +40,7 @@ def parse_cmd_args():
     parser.add_argument('--step_report_interval', type=int, default=50)
     parser.add_argument('--save_as_gif_interval', type=int, default=50)
     parser.add_argument('--profile', type=bool, default=False)
+    parser.add_argument('--load_ckpts', type=bool, default=False)
     cmd_args = parser.parse_args()
     return cmd_args
 
@@ -64,6 +65,7 @@ def parse_args(cmd_args):
     args.step_report_interval = cmd_args.step_report_interval
     args.save_as_gif_interval = cmd_args.save_as_gif_interval
     args.profile = cmd_args.profile
+    args.load_ckpts = cmd_args.load_ckpts
 
     return args
 
@@ -86,6 +88,44 @@ def pre_training_loop(args):
     args_dump_fn = os.path.join(args.working_dir, 'args.json')
     with open(args_dump_fn, 'w') as f:
         json.dump(args, f, indent=4)
+
+
+def cpts_loop(args):
+    out_dir = args.out_dir
+    os.makedirs(out_dir, exist_ok=True)
+    assert os.path.isdir(out_dir)
+    prev_ids = [re.match(r'^\d+', fn) for fn in os.listdir(out_dir)]
+    id_con = max([-1] + [int(id_.group()) if id_ else -1 for id_ in prev_ids])
+    ids = os.listdir(out_dir)
+    for id in ids:
+        if str(id_con) + '-' in id:
+            cur_id = id
+    args.working_dir = os.path.join(out_dir, cur_id)
+    # print(args.working_dir)
+    args_load_fn = os.path.join(args.working_dir, 'args.json')
+    with open(args_load_fn, 'r') as f:
+        info = json.load(f)
+    check = True
+    if args.target_fn != info['target_fn']:
+        check = False
+        print(args.target_fn)
+        print(info['target_fn'])
+    if args.height != info['height']:
+        check = False
+    if args.width != info['width']:
+        check = False
+    if args.n_triangle != info['n_triangle']:
+        check = False
+    if args.n_iterations != info['n_iterations']:
+        check = False
+    if args.n_population != info['n_population']:
+        check = False
+    if args.solver != info['solver']:
+        check = False
+    if args.loss_type != info['loss_type']:
+        check = False
+    if not check:
+        print('Wrong info')
 
 
 def load_target(fn, resize):
@@ -164,6 +204,31 @@ def infer_height_and_width(hint_height, hint_width, fn):
 
     return inferred_height, inferred_width
 
+def create_hook(args):
+    hooks = [
+            (args.step_report_interval, PrintStepHook()),
+            (args.report_interval, PrintCostHook()),
+            (args.report_interval, SaveCostHook(save_fp=os.path.join(args.working_dir, 'cost.txt'))),
+            (
+                args.report_interval,
+                StoreImageHook(
+                    render_fn=lambda params: painter.render(params, background='white'),
+                    save_fp=os.path.join(args.working_dir, 'animate-background=white'),
+                    fps=args.fps,
+                    save_interval=args.save_as_gif_interval,
+                ),
+            ),
+            (args.report_interval, StoreParamHook()),
+            (args.report_interval, ShowImageHook(render_fn=lambda params: painter.render(params, background='white'))),
+    ]
+
+    if args.load_ckpts:
+        for hook in hooks:
+            _, hook_fn_or_obj = hook
+            hook_fn_or_obj.load()
+        print('Done loading')
+
+    return hooks
 
 def training_loop(args):
     height, width = infer_height_and_width(args.height, args.width, args.target_fn)
@@ -179,21 +244,7 @@ def training_loop(args):
     target_arr = load_target(args.target_fn, (height, width))
     save_as_png(os.path.join(args.working_dir, 'target'), arr2img(target_arr))
 
-    hooks = [
-        (args.step_report_interval, PrintStepHook()),
-        (args.report_interval, PrintCostHook()),
-        (args.report_interval, SaveCostHook(save_fp=os.path.join(args.working_dir, 'cost.txt'))),
-        (
-            args.report_interval,
-            StoreImageHook(
-                render_fn=lambda params: painter.render(params, background='white'),
-                save_fp=os.path.join(args.working_dir, 'animate-background=white'),
-                fps=args.fps,
-                save_interval=args.save_as_gif_interval,
-            ),
-        ),
-        (args.report_interval, ShowImageHook(render_fn=lambda params: painter.render(params, background='white'))),
-    ]
+    hooks = create_hook(args)
 
     allowed_solver = ['pgpe']
     if args.solver not in allowed_solver:
@@ -245,12 +296,17 @@ def training_loop(args):
 def main():
     cmd_args = parse_cmd_args()
     args = parse_args(cmd_args)
-    pre_training_loop(args)
+    if args.load_ckpts:
+        cpts_loop(args)
+    else:
+        pre_training_loop(args)
+
 
     if args.profile:
         cProfile.runctx('training_loop(args)', globals(), locals(), sort='cumulative')
     else:
         training_loop(args)
+        # pass
 
 
 if __name__ == "__main__":

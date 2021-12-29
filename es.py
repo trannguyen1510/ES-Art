@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
 from datetime import datetime
+import numpy as np
+import os
+from PIL import Image
 from utils import (isnotebook, arr2img, save_as_gif, save_as_frames)
 
 
@@ -38,6 +41,9 @@ class PrintStepHook(Hook):
     def __call__(self, i, solver, fitness_fn, fitnesses_fn, best_params_fn):
         print(i, end=' ... ')
 
+    def load(self):
+        print('*Loading checkpoint')
+
 
 class PrintCostHook(Hook):
     def __init__(self, fitnesses_fn_is_wrapper=True):
@@ -52,6 +58,9 @@ class PrintCostHook(Hook):
             cost = fitnesses_fn([best_params])
         print()
         print(f'[{datetime.now()}]   Iteration: {i}   cost: {cost}')
+
+    def load(self):
+        pass
 
 
 class SaveCostHook(Hook):
@@ -71,9 +80,13 @@ class SaveCostHook(Hook):
         with open(self.save_fp, 'w') as fout:
             list(map(lambda r: print(r, file=fout), self.record))
 
+    def load(self):
+        with open(self.save_fp, 'r') as fin:
+            self.record.extend(fin.read().split('\n'))
+
 
 class StoreImageHook(Hook):
-    def __init__(self, render_fn, save_fp, fps=12, save_interval=0):
+    def __init__(self, render_fn, save_fp, fps=12, save_interval=1):
         super().__init__()
         self.render_fn = render_fn
         self.save_fp = save_fp
@@ -89,12 +102,38 @@ class StoreImageHook(Hook):
         if i % self.save_interval == 0:
             self.save()
 
+    def load(self):
+        img_dir = f'{self.save_fp}.frames'
+        for img_p in os.listdir(img_dir):
+            img = Image.open(os.path.join(img_dir, img_p))
+            self.imgs.append(img)
+
     def close(self):
         self.save()
 
     def save(self):
         save_as_gif(f'{self.save_fp}.gif', self.imgs, fps=self.fps)
         save_as_frames(f'{self.save_fp}.frames', self.imgs, overwrite=False)
+
+
+class StoreParamHook(Hook):
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, i, solver, fitness_fn, fitnesses_fn, best_params_fn):
+        self.best_params = best_params_fn(solver)
+        if i % self.save_interval == 0:
+            self.save()
+
+    def load(self):
+        self.best_params = np.load('data.npy')
+        pass
+
+    def close(self):
+        self.save()
+
+    def save(self):
+        np.save('data.npy', self.best_params)
 
 
 class ShowImageHook(Hook):
@@ -108,3 +147,6 @@ class ShowImageHook(Hook):
             img = arr2img(self.render_fn(best_params))
             # pylint:disable=undefined-variable
             display(img)  # type: ignore
+
+    def load(self):
+        pass
