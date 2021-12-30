@@ -18,7 +18,7 @@ import torchvision.transforms as transforms
 
 from utils import EasyDict
 from painter import TrianglesPainter
-from es import (PrintStepHook, PrintCostHook, SaveCostHook, StoreImageHook, ShowImageHook)
+from es import (PrintStepHook, PrintCostHook, SaveCostHook, StoreImageHook, StoreParamHook, ShowImageHook)
 
 
 def parse_cmd_args():
