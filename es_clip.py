@@ -38,6 +38,7 @@ def parse_cmd_args():
     parser.add_argument('--gpus', nargs='*', type=int, default=[])
     parser.add_argument('--thread_per_clip', type=int, default=1)
     parser.add_argument('--prompt', type=str, required=True)
+    parser.add_argument('--load_ckpts', type=bool, default=False)
 
     cmd_args = parser.parse_args()
     return cmd_args
@@ -62,8 +63,14 @@ def parse_args(cmd_args):
     args.gpus = cmd_args.gpus
     args.thread_per_clip = cmd_args.thread_per_clip
     args.prompt = cmd_args.prompt
+    args.load_ckpts = cmd_args.load_ckpts
 
     return args
+
+def dump_info(args):
+    args_dump_fn = os.path.join(args.working_dir, 'args.json')
+    with open(args_dump_fn, 'w') as f:
+        json.dump(args, f, indent=4)
 
 
 def pre_training_loop(args):
@@ -81,13 +88,56 @@ def pre_training_loop(args):
 
     # Prepare working directory.
     os.makedirs(args.working_dir)
-    args_dump_fn = os.path.join(args.working_dir, 'args.json')
-    with open(args_dump_fn, 'w') as f:
-        json.dump(args, f, indent=4)
+    dump_info(args)
 
+def cpts_loop(args):
+    out_dir = args.out_dir
+    os.makedirs(out_dir, exist_ok=True)
+    assert os.path.isdir(out_dir)
+    prev_ids = [re.match(r'^\d+', fn) for fn in os.listdir(out_dir)]
+    id_con = max([-1] + [int(id_.group()) if id_ else -1 for id_ in prev_ids])
+    ids = os.listdir(out_dir)
+    for id in ids:
+        if str(id_con) + '-' in id:
+            cur_id = id
+    args.working_dir = os.path.join(out_dir, cur_id)
+    # print(args.working_dir)
+    args_load_fn = os.path.join(args.working_dir, 'args.json')
+    with open(args_load_fn, 'r') as f:
+        info = json.load(f)
+    check = True
+    if args.prompt != info['prompt']:
+        check = False
+        print(args.prompt)
+        print(info['prompt'])
+    if args.height != info['height']:
+        check = False
+    if args.width != info['width']:
+        check = False
+    if args.n_triangle != info['n_triangle']:
+        check = False
+    if args.n_iterations < info['n_iterations']:
+        check = False
+        raise ValueError(f'Incorrect Iterations: {args.n_iterations}')
+    if args.n_population != info['n_population']:
+        check = False
+    if args.solver != info['solver']:
+        check = False
+    if args.loss_type != info['loss_type']:
+        check = False
+    if not check:
+        print('Wrong info')
+
+    desc = f'[{args.prompt}]-prompt-' \
+           f'{args.n_triangle}-triangles-' \
+           f'{args.n_iterations}-iterations-' \
+           f'{args.n_population}-population'
+    new_working_dir = os.path.join(out_dir, f'{id_con:04d}-{desc}')
+    os.rename(args.working_dir, new_working_dir)
+    args.working_dir = new_working_dir
+    args.last_inter = info['last_inter']
 
 worker_assets = None
-
 
 def init_worker(gpu_queue, text, painter):
     global worker_assets
@@ -145,22 +195,7 @@ def fitness_fn_by_worker(solution):
     return similarities[0]
 
 
-def training_loop(args):
-    painter = TrianglesPainter(
-        h=args.height,
-        w=args.width,
-        n_triangle=args.n_triangle,
-        alpha_scale=args.alpha_scale,
-        coordinate_scale=args.coordinate_scale,
-    )
-
-    solver = PGPE(
-        solution_length=painter.n_params,
-        popsize=args.n_population,
-        optimizer='clipup',
-        optimizer_config={'max_speed': 0.15},
-    )
-
+def create_hook(args, painter):
     hooks = [
         (
             args.step_report_interval,
@@ -188,9 +223,45 @@ def training_loop(args):
         ),
         (
             args.report_interval,
-            ShowImageHook(render_fn=lambda params: painter.render(params, background='white')),
+            StoreParamHook(save_fp=os.path.join(args.working_dir, 'data.npy'))
+        ),
+        (
+            args.report_interval,
+            ShowImageHook(render_fn=lambda params: painter.render(params, background='white'))
         ),
     ]
+
+    if args.load_ckpts:
+        for hook in hooks:
+            _, hook_fn_or_obj = hook
+            hook_fn_or_obj.load()
+            if hasattr(hook_fn_or_obj, 'best_params'):
+                center_init = hook_fn_or_obj.best_params
+        print('Done loading')
+    else:
+        center_init = None
+
+    return hooks, center_init
+
+
+def training_loop(args):
+    painter = TrianglesPainter(
+        h=args.height,
+        w=args.width,
+        n_triangle=args.n_triangle,
+        alpha_scale=args.alpha_scale,
+        coordinate_scale=args.coordinate_scale,
+    )
+
+    solver = PGPE(
+        solution_length=painter.n_params,
+        popsize=args.n_population,
+        optimizer='clipup',
+        optimizer_config={'max_speed': 0.15},
+        center_init = center_init
+    )
+
+    hooks, center_init = create_hook(args, painter)
 
     n_iterations = args.n_iterations
     if len(args.gpus) > 0:
@@ -214,7 +285,12 @@ def training_loop(args):
     hook_fitnesses_fn = lambda solutions: worker_pool.map(fitness_fn_by_worker, solutions)
     hook_best_params_fn = lambda solver: solver.center
 
-    for i in range(1, 1 + n_iterations):
+    if args.load_ckpts:
+        init_inter = args.last_inter
+    else:
+        init_inter = 1
+
+    for i in range(init_inter, 1 + n_iterations):
         solutions = solver.ask()
 
         batch_size = (len(solutions) + n_worker - 1) // n_worker  # = ceil( solutions / n_worker )
@@ -234,6 +310,8 @@ def training_loop(args):
                     fitnesses_fn=hook_fitnesses_fn,
                     best_params_fn=hook_best_params_fn,
                 )
+                args.last_inter = i
+                dump_info(args)
 
     for hook in hooks:
         _, hook_fn_or_obj = hook
