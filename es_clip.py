@@ -325,7 +325,10 @@ def training_loop(args):
 def main():
     cmd_args = parse_cmd_args()
     args = parse_args(cmd_args)
-    pre_training_loop(args)
+    if args.load_ckpts:
+        cpts_loop(args)
+    else:
+        pre_training_loop(args)
     training_loop(args)
 
 
