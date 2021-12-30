@@ -253,6 +253,8 @@ def training_loop(args):
         coordinate_scale=args.coordinate_scale,
     )
 
+    hooks, center_init = create_hook(args, painter)
+
     solver = PGPE(
         solution_length=painter.n_params,
         popsize=args.n_population,
@@ -260,8 +262,6 @@ def training_loop(args):
         optimizer_config={'max_speed': 0.15},
         center_init = center_init
     )
-
-    hooks, center_init = create_hook(args, painter)
 
     n_iterations = args.n_iterations
     if len(args.gpus) > 0:
