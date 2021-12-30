@@ -121,8 +121,6 @@ def cpts_loop(args):
         raise ValueError(f'Incorrect Iterations: {args.n_iterations}')
     if args.n_population != info['n_population']:
         check = False
-    if args.loss_type != info['loss_type']:
-        check = False
     if not check:
         print('Wrong info')
 
