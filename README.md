@@ -64,6 +64,8 @@ python3 ./es_bitmap.py \
     --n_iterations 10000            `# Number of iterations for ES algorithm` \
     ;
 ```
+For continuing train, add --load_ckpts True with the same hyper-parameters, the program will pick up from the last interation
+
 
 For more options, consult the output of `python3 ./es_bitmap.py --help`.
 
@@ -92,6 +94,10 @@ python3 ./es_clip.py \
     ;
 ```
 Note that this script uses 8 GPUs in the example above.
+
+
+For continuing train, add --load_ckpts True with the same hyper-parameters, the program will pick up from the last interation
+
 
 For more options, consult the output of `python3 ./es_clip.py --help`.
 
